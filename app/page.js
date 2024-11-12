@@ -9,18 +9,22 @@ import {
 } from "@/components/ui/accordion";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { CopyIcon, XIcon, RotateCcwIcon, RotateCwIcon, CloudUploadIcon } from "lucide-react";
+import { CopyIcon, XIcon, RotateCcwIcon, RotateCwIcon, CloudUploadIcon, GridIcon } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
 export default function Home() {
+  const [showGrid, setShowGrid] = useState(false);
   const [blackLevel, setBlackLevel] = useState(120);
   const [whiteLevel, setWhiteLevel] = useState(130);
   const [gamma, setGamma] = useState(1.0);
   const [saturation, setSaturation] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [microRotation, setMicroRotation] = useState(0);
 
   const canvasRef = useRef(null);
   const originalImageData = useRef(null);
+  const originalImage = useRef(null);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -29,31 +33,57 @@ export default function Home() {
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext("2d");
-
-          // Set canvas dimensions
-          const CANVAS_WIDTH = 800;
-          const CANVAS_HEIGHT = 600;
-          canvas.width = CANVAS_WIDTH;
-          canvas.height = CANVAS_HEIGHT;
-
-          // Scale the image to fit the canvas
-          const scale = Math.min(CANVAS_WIDTH / img.width, CANVAS_HEIGHT / img.height);
-          const offsetX = (CANVAS_WIDTH - img.width * scale) / 2;
-          const offsetY = (CANVAS_HEIGHT - img.height * scale) / 2;
-          ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-          ctx.drawImage(img, offsetX, offsetY, img.width * scale, img.height * scale);
-
-          // Store the original image data
-          originalImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          originalImage.current = img;
+          drawRotatedImage();
           setImageLoaded(true);
-          applyAdjustments();
         };
         img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleImageClose = () => {
+    setImageLoaded(false);
+    setBlackLevel(120);
+    setWhiteLevel(130);
+    setGamma(1.0);
+    setSaturation(0);
+    setRotation(0);
+    setMicroRotation(0);
+    setShowGrid(false);
+  }
+
+  const drawRotatedImage = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const img = originalImage.current;
+
+    if (!img) return;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 550;
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    const scale = Math.min(CANVAS_WIDTH / img.width, CANVAS_HEIGHT / img.height);
+    const scaledWidth = img.width * scale;
+    const scaledHeight = img.height * scale;
+
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.save();
+    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.rotate(((rotation * 90 + microRotation) * Math.PI) / 180);
+    ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+    ctx.restore();
+
+    originalImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyAdjustments();
+  };
+
+  const rotateImage = (direction) => {
+    setRotation((prevRotation) => (prevRotation + direction + 4) % 4);  // 1 = 90, 4 = 360
+    setMicroRotation(0);
   };
 
   const applyAdjustments = () => {
@@ -69,22 +99,16 @@ export default function Home() {
     const data = imageData.data;
 
     for (let i = 0; i < data.length; i += 4) {
-      // Calculate the grayscale average for the pixel
       const average = (data[i] + data[i + 1] + data[i + 2]) / 3;
 
-      // Apply saturation adjustment
       for (let j = 0; j < 3; j++) {
-        // Blend each color channel towards the grayscale average based on saturation
         data[i + j] = average + (data[i + j] - average) * (saturation / 100);
       }
 
-      // Apply black and white level adjustments and gamma correction
       for (let j = 0; j < 3; j++) {
         let value = data[i + j];
-        value = ((value - blackLevel) * (255 / (whiteLevel - blackLevel))); // Black/white level adjustment
-        value = 255 * Math.pow(value / 255, gamma); // Gamma correction
-
-        // Clamp values between 0 and 255
+        value = ((value - blackLevel) * (255 / (whiteLevel - blackLevel)));
+        value = 255 * Math.pow(value / 255, gamma);
         data[i + j] = Math.min(255, Math.max(0, value));
       }
     }
@@ -92,7 +116,7 @@ export default function Home() {
   };
 
   const saveImage = () => {
-    if(!imageLoaded) return;
+    if (!imageLoaded) return;
 
     const canvas = canvasRef.current;
     const image = canvas.toDataURL("image/png");
@@ -101,31 +125,47 @@ export default function Home() {
     link.download = "edited_image.png";
     link.click();
   };
+
   useEffect(() => {
-    applyAdjustments();
-  });
+    if (imageLoaded) {
+      drawRotatedImage();
+    }
+  }, [rotation, microRotation, blackLevel, whiteLevel, gamma, saturation]);
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-between h-screen overflow-hidden">
-      {/* Image viewer */}
+      {/* Grid */}
+      {showGrid && (
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="w-9/12 h-full grid grid-cols-4 grid-rows-4 border-opacity-0">
+            {Array.from({ length: 16 }).map((_, index) => (
+              <div key={index} className="border border-muted-foreground/50"></div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-gray-400/10 w-9/12 h-screen">
         <div className="flex items-center justify-between px-1">
-          <button onClick={() => setImageLoaded(false)} className="cursor-pointer opacity-40 hover:opacity-100 transition-all rounded-full p-1">
+          <button onClick={() => handleImageClose()} className="cursor-pointer opacity-40 hover:opacity-100 transition-all rounded-full p-1">
             <XIcon className="w-5 inline" />
           </button>
 
           <div>
-            <button className=" cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+            <button onClick={() => setShowGrid(!showGrid)} className=" cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+              <GridIcon className="w-5 inline" />
+            </button>
+            <button onClick={() => rotateImage(-1)} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
               <RotateCcwIcon className="w-5 inline" />
             </button>
-            <button className=" cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+            <button onClick={() => rotateImage(1)} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
               <RotateCwIcon className="w-5 inline" />
             </button>
           </div>
         </div>
 
         <div className="h-full w-full flex items-center justify-center pb-20">
-          <canvas ref={canvasRef} className={`${!imageLoaded && "hidden"} p-10 px-20 rounded-md cursor-pointer`} />
+          <canvas ref={canvasRef} className={`${!imageLoaded && "hidden"}  px-20 rounded-md cursor-pointer`} />
           {!imageLoaded && (
             <div className="border mb-20 p-10 px-20 rounded-md flex flex-col gap-2 items-center justify-center cursor-pointer">
               <CloudUploadIcon className="text-muted-foreground h-20 w-20" />
@@ -141,14 +181,30 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Adjustment Sliders and Output */}
       <ScrollArea className="h-screen w-3/12">
         <div className="flex flex-col gap-4 p-5 h-screen">
           <h2 className="font-bold text-sm">Edit</h2>
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible defaultValue="item-1">
             <AccordionItem value="item-1">
               <AccordionTrigger>Adjustments</AccordionTrigger>
               <AccordionContent className="py-5 space-y-5">
+
+                {/* Saturation Slider */}
+                <div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+                    <span>Saturation</span>
+                    <span>{saturation}</span>
+                  </div>
+                  <Slider
+                    value={[saturation]}
+                    min={0}
+                    max={200}
+                    step={1}
+                    onValueChange={([value]) => {
+                      setSaturation(value);
+                    }}
+                  />
+                </div>
 
                 {/* Black Level Slider */}
                 <div>
@@ -162,7 +218,6 @@ export default function Home() {
                     step={1}
                     onValueChange={([value]) => {
                       setBlackLevel(value);
-                      // applyAdjustments();
                     }}
                   />
                 </div>
@@ -183,7 +238,6 @@ export default function Home() {
                   />
                 </div>
 
-
                 {/* Gamma Slider */}
                 <div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
@@ -201,19 +255,19 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Saturation Slider */}
+                {/* Rotation Slider */}
                 <div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
-                    <span>Saturation</span>
-                    <span>{saturation}</span>
+                    <span>Fine Rotation</span>
+                    <span>{microRotation}°</span>
                   </div>
                   <Slider
-                    value={[saturation]}
-                    min={0}
-                    max={200}
+                    value={[microRotation]}
+                    min={-45}
+                    max={45}
                     step={1}
                     onValueChange={([value]) => {
-                      setSaturation(value);
+                      setMicroRotation(value);
                     }}
                   />
                 </div>
