@@ -26,6 +26,20 @@ export default function Home() {
   const originalImageData = useRef(null);
   const originalImage = useRef(null);
 
+  const [isHovered, setIsHovered] = useState(false)
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const cardRef = useRef(null)
+
+  const handleMouseMove = (e) => {
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect()
+      setMousePosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      })
+    }
+  }
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -132,6 +146,14 @@ export default function Home() {
     }
   }, [rotation, microRotation, blackLevel, whiteLevel, gamma, saturation]);
 
+  useEffect(() => {
+    const card = cardRef.current
+    if (card) {
+      card.style.setProperty('--mouse-x', `${mousePosition.x}px`)
+      card.style.setProperty('--mouse-y', `${mousePosition.y}px`)
+    }
+  }, [mousePosition])
+
   return (
     <div className="flex flex-col md:flex-row items-center justify-between h-screen overflow-hidden">
       {/* Grid */}
@@ -152,13 +174,13 @@ export default function Home() {
           </button>
 
           <div>
-            <button onClick={() => setShowGrid(!showGrid)} className=" cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+            <button onClick={() => setShowGrid(!showGrid)} disabled={!imageLoaded} className=" cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
               <GridIcon className="w-5 inline" />
             </button>
-            <button onClick={() => rotateImage(-1)} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+            <button onClick={() => rotateImage(-1)} disabled={!imageLoaded} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
               <RotateCcwIcon className="w-5 inline" />
             </button>
-            <button onClick={() => rotateImage(1)} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
+            <button onClick={() => rotateImage(1)} disabled={!imageLoaded} className="cursor-pointer opacity-40 text-muted-foreground hover:opacity-100 transition-all rounded-full p-1">
               <RotateCwIcon className="w-5 inline" />
             </button>
           </div>
@@ -167,15 +189,25 @@ export default function Home() {
         <div className="h-full w-full flex items-center justify-center pb-20">
           <canvas ref={canvasRef} className={`${!imageLoaded && "hidden"}  px-20 rounded-md cursor-pointer`} />
           {!imageLoaded && (
-            <div className="border mb-20 p-10 px-20 rounded-md flex flex-col gap-2 items-center justify-center cursor-pointer">
-              <CloudUploadIcon className="text-muted-foreground h-20 w-20" />
-              <p className="text-muted-foreground text-center">Drag and drop an image here or click to upload</p>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
+            <div
+              ref={cardRef}
+              className={`relative w-[500px] h-52 mb-20 rounded-md cursor-pointer overflow-hidden transition-all duration-300 ${isHovered && 'glow'}`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              onMouseMove={handleMouseMove}
+            >
+              <div className="absolute inset-[2px] hover:bg-gradient-to-r from-slate-500/10 to-slate-500/10 border rounded-md z-10 flex flex-col gap-2 items-center justify-center transition-all duration-500">
+                <CloudUploadIcon className="text-muted-foreground h-20 w-20" />
+                <p className="text-muted-foreground text-center">
+                  Drag and drop an image here or click to upload
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                />
+              </div>
             </div>
           )}
         </div>

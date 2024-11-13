@@ -6,6 +6,25 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.glow::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  background: radial-gradient(
+    circle at var(--mouse-x) var(--mouse-y),
+    rgba(255, 255, 255, 0.089) 0%,
+    rgba(0, 0, 0, 0) 50%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.glow:hover::before {
+  opacity: 1;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
