@@ -21,6 +21,7 @@ export default function Home() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [microRotation, setMicroRotation] = useState(0);
+  const [extractedText, setExtractedText] = useState("");
 
   const canvasRef = useRef(null);
   const originalImageData = useRef(null);
@@ -66,6 +67,7 @@ export default function Home() {
     setRotation(0);
     setMicroRotation(0);
     setShowGrid(false);
+    setExtractedText("");
   }
 
   const drawRotatedImage = () => {
@@ -129,16 +131,52 @@ export default function Home() {
     ctx.putImageData(imageData, 0, 0);
   };
 
-  const saveImage = () => {
+
+  const sendImageToServer = async () => {
     if (!imageLoaded) return;
 
     const canvas = canvasRef.current;
-    const image = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.href = image;
-    link.download = "edited_image.png";
-    link.click();
+
+    // Convert canvas content to Blob (image file)
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      const formData = new FormData();
+      formData.append("image", blob, "image.png");
+
+      try {
+        const response = await fetch("http://127.0.0.1:5000/predict", {
+          method: "POST",
+          body: formData, // Send the image as multipart/form-data
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to extract text.");
+        }
+
+        const data = await response.json();
+        setExtractedText(data.predicted_text || "No text detected."); // Adjust key to match server response
+        console.log(extractedText)
+      } catch (error) {
+        console.error(error);
+        setExtractedText("Error extracting text.");
+      }
+    }, "image/png");
   };
+
+  const copyToClipboard = () => {
+    if (extractedText) {
+      navigator.clipboard.writeText(extractedText)
+        .then(() => {
+          alert("Text copied to clipboard!");
+        })
+        .catch((err) => {
+          console.error("Error copying text: ", err);
+        });
+    }
+  };
+
+
 
   useEffect(() => {
     if (imageLoaded) {
@@ -308,16 +346,17 @@ export default function Home() {
             </AccordionItem>
           </Accordion>
 
-          <Button onClick={() => saveImage()}>Extract Text from Image</Button>
+          <Button onClick={() => sendImageToServer()}>Extract Text from Image</Button>
 
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm">Output</h2>
-            <div className="flex items-center justify-center gap-1 text-muted-foreground text-sm hover:bg-muted p-1 rounded-xl cursor-pointer">
+            <div onClick={() => copyToClipboard()} className="flex items-center justify-center gap-1 text-muted-foreground text-sm hover:bg-muted p-1 rounded-xl cursor-pointer">
               <span>Copy</span>
               <CopyIcon className="w-4" />
             </div>
           </div>
-          <div className="h-full bg-muted rounded-md">
+          <div className="h-full bg-muted rounded-md p-2">
+            <pre>{extractedText}</pre>
           </div>
         </div>
       </ScrollArea>
